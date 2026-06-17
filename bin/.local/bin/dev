@@ -44,8 +44,8 @@ if ! tmux has-session -t "=$session" 2>/dev/null; then
   nvim_pane=$(tmux split-window -h -t "$claude_pane" -c "$dir" -P -F '#{pane_id}')
   term_pane=$(tmux split-window -v -t "$nvim_pane" -c "$dir" -P -F '#{pane_id}')
 
-  # Claude takes a 1/4 left column; the terminal takes the bottom third of the right.
-  tmux resize-pane -t "$claude_pane" -x 25%
+  # Claude takes a 30% left column; the terminal takes the bottom third of the right.
+  tmux resize-pane -t "$claude_pane" -x 30%
   tmux resize-pane -t "$term_pane" -y 33%
 
   # Label the panes (handy when navigating)
