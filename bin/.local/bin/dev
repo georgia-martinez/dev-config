@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+#
+# dev [DIR] — open a project in a 3-pane tmux layout:
+#
+#   +----------+----------------------------+
+#   |          |            nvim            |
+#   |          |                            |
+#   |  claude  +----------------------------+
+#   |          |          terminal          |
+#   |          |                            |
+#   +----------+----------------------------+
+#
+# All three panes start in the same project directory, so Claude, Neovim,
+# and the shell are all working on the same files. Re-running for the same
+# directory re-attaches to the existing session instead of recreating it.
+#
+# Usage:
+#   dev                  # use the current directory
+#   dev ~/Repos/foo      # use a specific directory
+
+set -euo pipefail
+
+dir="${1:-$PWD}"
+dir="$(cd "$dir" && pwd)"                                   # resolve to absolute path
+session="$(basename "$dir" | tr -c 'A-Za-z0-9_' '_')"        # tmux-safe session name
+
+if ! tmux has-session -t "=$session" 2>/dev/null; then
+  # Create the detached session at the *current terminal's* size. A plain
+  # `new-session -d` uses tmux's default 80x24, so percentage-based pane sizes
+  # get computed against the wrong width and then rescaled on attach — which
+  # both throws off the layout and garbles Claude's TUI as it's resized
+  # mid-render. Sizing the session correctly up front avoids the rescale.
+  if [ -n "${TMUX:-}" ]; then
+    cols=$(tmux display-message -p '#{client_width}')
+    lines=$(tmux display-message -p '#{client_height}')
+  else
+    cols=$(tput cols)
+    lines=$(tput lines)
+  fi
+
+  # Build the full layout first (no programs running yet), so each pane is
+  # already at its final size before anything renders into it.
+  claude_pane=$(tmux new-session -d -s "$session" -c "$dir" -x "$cols" -y "$lines" -P -F '#{pane_id}')
+  nvim_pane=$(tmux split-window -h -t "$claude_pane" -c "$dir" -P -F '#{pane_id}')
+  term_pane=$(tmux split-window -v -t "$nvim_pane" -c "$dir" -P -F '#{pane_id}')
+
+  # Claude takes a 1/4 left column; the terminal takes the bottom third of the right.
+  tmux resize-pane -t "$claude_pane" -x 25%
+  tmux resize-pane -t "$term_pane" -y 33%
+
+  # Label the panes (handy when navigating)
+  tmux select-pane -t "$claude_pane" -T claude
+  tmux select-pane -t "$nvim_pane"   -T nvim
+  tmux select-pane -t "$term_pane"   -T terminal
+
+  # Now launch the programs, each into its already-final-size pane
+  tmux send-keys -t "$claude_pane" 'claude --continue' C-m
+  tmux send-keys -t "$nvim_pane" 'nvim .' C-m
+
+  # Start focused on Claude
+  tmux select-pane -t "$claude_pane"
+fi
+
+# Attach (or switch, if we're already inside tmux)
+if [ -n "${TMUX:-}" ]; then
+  tmux switch-client -t "=$session"
+else
+  tmux attach -t "=$session"
+fi
