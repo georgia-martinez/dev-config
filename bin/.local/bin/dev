@@ -60,8 +60,10 @@ if ! tmux has-session -t "=$session" 2>/dev/null; then
   # The terminal pane runs a *nested* tmux (own socket + config) so it works
   # like VS Code's terminal: multiple switchable terminal "tabs". One inner
   # session per project, reattached on re-open. See ~/.config/tmux/term.conf.
+  # No `exec`: if the nested tmux is killed or exited, the pane falls back to a
+  # plain shell instead of disappearing from the layout.
   tmux send-keys -t "$term_pane" \
-    "exec tmux -L devterm -f \"$HOME/.config/tmux/term.conf\" new-session -A -s '$session' -c '$dir'" C-m
+    "tmux -L devterm -f \"$HOME/.config/tmux/term.conf\" new-session -A -s '$session' -c '$dir'" C-m
 
   # Start focused on Claude
   tmux select-pane -t "$claude_pane"
